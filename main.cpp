@@ -11,7 +11,7 @@
 static const char msg_to_send[]      = "00000043{\"path\":\"/echo\",\"message\":\"echo this back\"}";
 static constexpr int msg_to_send_len = 51;
 
-static constexpr int msg_to_rec_len  = 10000;
+static constexpr int msg_to_rec_len  = 70;
 
 // each thread will count the number of requests they complete
 thread_local int count = 0;
@@ -76,7 +76,7 @@ static void do_work(int &count, const char *ip, const int port)
     }
 }
 
-static int get_total_requests(const int runtime, const std::vector<int> &counts)
+static void print_stats(const int runtime, const std::vector<int> &counts)
 {
     int   total = 0;
     float reqps = 0;
@@ -84,15 +84,14 @@ static int get_total_requests(const int runtime, const std::vector<int> &counts)
     for (const auto &count: counts)
         total += count;
 
-    reqps = total / runtime;
+    reqps = (float)total / (float)runtime;
     printf("Total requests: %d\nTime(s): %d\nRequests per second: %f", total, runtime, reqps);
-    exit(0);
 }
 
 // client
 int main(int argc, char *argv[])
 {
-	int port, num_threads, runtime;
+    int port, num_threads, runtime;
     char *ip;
 
     ip = argv[1];
@@ -111,12 +110,12 @@ int main(int argc, char *argv[])
         threads.emplace_back(std::thread(do_work, std::ref(counts[i]), ip, port));
     }
 
-    auto fut = std::async(std::launch::async, [runtime, &counts] { sleep(runtime); get_total_requests(runtime, counts); });
+    sleep(runtime);
+    print_stats(runtime, counts);
+    exit(0);
+	return 0;
 
     // Have each thread count the number of response.
     // At the end of the runtime we sum all the threads count
-    // Then we join the threads and calculate and display
-    // the requests per second.
-
-	return 0;
+    // and print the stats.
 }
