@@ -13,9 +13,6 @@ static constexpr int msg_to_send_len = 51;
 
 static constexpr int msg_to_rec_len  = 70;
 
-// each thread will count the number of requests they complete
-thread_local int count = 0;
-
 static int setup_socket(const char *ip, const int port)
 {
 	int srvrfd;
@@ -48,31 +45,49 @@ static void write_msg(const int sockfd)
     int total = 0, result = 0;
 
     while (total < msg_to_send_len) {
-        result = write(sockfd, msg_to_send, msg_to_send_len);
+        result = write(sockfd, msg_to_send + total, msg_to_send_len - total);
         if (result > -1)
             total += result;
     }
 }
 
-static void read_msg(const int sockfd)
+static bool read_msg(const int sockfd)
 {
     int total = 0, result = 0;
     char buf[msg_to_rec_len] = {0};
+    //char buf[10];
 
     while (total < msg_to_rec_len) {
-        result = read(sockfd, buf, msg_to_rec_len);
+        result = read(sockfd, buf + total, msg_to_rec_len - total);
         if (result > 0)
             total += result;
     }
+    
+    if (memcmp(buf, "00000062{\"message\":\"echo this back\",\"path\":\"/echo\",\"server\":\"Grackle\"}", 70) == 0) {
+    	return true;
+    } else {
+    	return false;
+    }
+    /*
+    if (strcmp(buf, "00000062{\"message\":\"echo this back\",\"path\":\"/echo\",\"server\":\"Grackle\"}") == 0) {
+    	return true;
+    } else {
+    	return false;
+    }
+    */
 }
 
 static void do_work(int &count, const char *ip, const int port)
 {
+    bool status;
+    
     int sockfd = setup_socket(ip, port);
     while (1) {
         write_msg(sockfd);
-        read_msg(sockfd);
-        count++;
+        status = read_msg(sockfd);
+        if (status) {
+            count++;
+        }
     }
 }
 
@@ -88,7 +103,6 @@ static void print_stats(const int runtime, const std::vector<int> &counts)
     printf("Total requests: %d\nTime(s): %d\nRequests per second: %f", total, runtime, reqps);
 }
 
-// client
 int main(int argc, char *argv[])
 {
     int port, num_threads, runtime;
@@ -99,11 +113,7 @@ int main(int argc, char *argv[])
     num_threads = atoi(argv[3]);
     runtime = atoi(argv[4]);
 
-    std::vector<int> counts;
-    for (int i = 0; i < num_threads; ++i) {
-        counts.push_back(0);
-    }
-
+    std::vector<int> counts(num_threads, 0);
     std::vector<std::thread> threads;
     threads.reserve(num_threads);
     for (int i = 0; i < num_threads; ++i) {
@@ -112,10 +122,10 @@ int main(int argc, char *argv[])
 
     sleep(runtime);
     print_stats(runtime, counts);
-    exit(0);
+    exit(0); // kills all the threads and close all fds
 	return 0;
 
-    // Have each thread count the number of response.
-    // At the end of the runtime we sum all the threads count
+    // Have each thread count the number of responses.
+    // At the end of the runtime we sum all the threads' counts
     // and print the stats.
 }
